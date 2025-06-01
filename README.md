@@ -23,6 +23,7 @@ Este projeto implementa um sistema completo para consulta de automóveis, com co
 - Django 3.2
 - PostgreSQL (para ambiente Docker)
 - Faker (para geração de dados fictícios)
+- unittest (para execução de testes unitários)
 
 ## Instruções para Execução
 
@@ -98,6 +99,40 @@ Ou diretamente:
 ```bash
 python agente_virtual.py
 ```
+
+## Executando os Testes Unitários
+
+O projeto inclui testes unitários para todas as partes principais do sistema:
+
+- **Testes Django**: Testes para o modelo Automovel e para as views (index, api_automoveis, busca_rapida)
+- **Testes MCP**: Testes para o cliente MCP (comunicação com o servidor)
+- **Testes Agente Virtual**: Testes para o agente virtual (mapeamento de marcas, combustíveis e interação com o usuário)
+
+Para executar todos os testes de uma vez, use o script `run_tests.sh`:
+
+```bash
+# Em ambiente local
+./run_tests.sh
+
+# Ou dentro do container Docker
+docker-compose exec web bash -c "./run_tests.sh"
+```
+
+### Detalhes dos Testes
+
+1. **Testes Django** (`automoveis/tests.py`):
+   - Testes para o modelo Automovel (criação, representação string, métodos display)
+   - Testes para as views (index, api_automoveis, busca_rapida)
+   - Testes para os filtros e ordenação da busca rápida
+
+2. **Testes MCP** (`tests/test_mcp_components.py`):
+   - Testes para o cliente MCP (envio de consultas, tratamento de respostas)
+   - Utiliza mocks para simular a comunicação com o servidor
+
+3. **Testes Agente Virtual** (`tests/test_agente_virtual.py`):
+   - Testes para mapeamento de marcas (ex: "volkswagen" -> "VW", "chevrolet" -> "GM")
+   - Testes para mapeamento de combustíveis (ex: "flex" -> "F")
+   - Testes para exibição de resultados e interação com o usuário
 
 ## Funcionalidades Principais
 
