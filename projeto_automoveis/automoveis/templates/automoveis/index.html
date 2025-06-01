@@ -1,0 +1,260 @@
+{% extends 'automoveis/base.html' %}
+
+{% block title %}Início - Sistema de Consulta de Automóveis{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Bem-vindo ao Sistema de Consulta de Automóveis</h1>
+    <p class="lead">Um sistema completo para consulta de automóveis com comunicação cliente-servidor via protocolo MCP.</p>
+    <hr class="my-4">
+    {% if error %}
+    <div class="alert alert-danger">
+        <p>Ocorreu um erro ao consultar o banco de dados: {{ error }}</p>
+    </div>
+{% else %}
+    <p>Atualmente temos <strong>{{ total_automoveis }}</strong> automóveis cadastrados no sistema.</p>
+{% endif %}
+    <p>Para interagir com o sistema, você pode:</p>
+    <ul>
+        <li>Usar o agente virtual no terminal com o comando <code>python agente_virtual.py</code></li>
+        <li>Acessar a API em <a href="{% url 'automoveis:api_automoveis' %}">{% url 'automoveis:api_automoveis' %}</a></li>
+        <li>Gerenciar os automóveis pelo <a href="{% url 'admin:index' %}">painel administrativo</a></li>
+    </ul>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Consulta Rápida
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Busque automóveis diretamente pela interface web</h5>
+                <form id="busca-rapida-form" method="post" action="{% url 'automoveis:busca_rapida' %}">
+                    {% csrf_token %}
+                    <div class="form-group mb-3">
+                        <label for="marca">Marca</label>
+                        <select class="form-control" id="marca" name="marca">
+                            <option value="">Todas as marcas</option>
+                            {% for codigo, nome in marcas %}
+                            <option value="{{ codigo }}">{{ nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="modelo">Modelo (opcional)</label>
+                        <input type="text" class="form-control" id="modelo" name="modelo" placeholder="Ex: Gol, Civic, Corolla">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="combustivel">Combustível</label>
+                        <select class="form-control" id="combustivel" name="combustivel">
+                            <option value="">Todos os combustíveis</option>
+                            {% for codigo, nome in combustiveis %}
+                            <option value="{{ codigo }}">{{ nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="ordenacao">Ordenar por</label>
+                        <select class="form-control" id="ordenacao" name="ordenacao">
+                            <option value="">Padrão</option>
+                            <option value="preco_asc">Preço (menor para maior)</option>
+                            <option value="preco_desc">Preço (maior para menor)</option>
+                            <option value="km_asc">Quilometragem (menor para maior)</option>
+                            <option value="km_desc">Quilometragem (maior para menor)</option>
+                            <option value="ano_asc">Ano (mais antigo primeiro)</option>
+                            <option value="ano_desc">Ano (mais novo primeiro)</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="disponivel" name="disponivel" checked>
+                        <label class="form-check-label" for="disponivel">Apenas disponíveis</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Buscar</button>
+                </form>
+                <div id="resultados-busca" class="mt-3" style="display: none;">
+                    <h6>Resultados da busca:</h6>
+                    <div id="lista-resultados" class="list-group">
+                        <!-- Resultados serão inseridos aqui via JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Estatísticas
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Dados do sistema</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">Total de automóveis: {{ total_automoveis }}</li>
+                    <li class="list-group-item">Servidor MCP: Ativo</li>
+                    <li class="list-group-item">Última atualização: {% now "d/m/Y H:i" %}</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    /* Estilos para os badges suavizados */
+    .badge-disponivel {
+        background-color: #8bc34a !important; /* Verde mais suave */
+        color: #fff;
+        font-size: 0.7rem;
+        padding: 0.25em 0.6em;
+    }
+    
+    .badge-indisponivel {
+        background-color: #ff8a80 !important; /* Vermelho mais suave */
+        color: #fff;
+        font-size: 0.7rem;
+        padding: 0.25em 0.6em;
+    }
+    
+    .disponibilidade-container {
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+    }
+    
+    /* Estilos para destaque de preço e quilometragem */
+    .preco-destaque, .km-destaque {
+        padding: 8px;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .preco-destaque:hover, .km-destaque:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .preco-destaque {
+        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+        border-left: 4px solid #1976d2;
+    }
+    
+    .km-destaque {
+        background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+        border-left: 4px solid #7b1fa2;
+    }
+    
+    .preco-label, .km-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        font-weight: 600;
+        color: #555;
+        letter-spacing: 0.5px;
+    }
+    
+    .preco-valor {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #1976d2;
+    }
+    
+    .km-valor {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #7b1fa2;
+    }
+    
+    .list-group-item {
+        transition: all 0.2s ease;
+    }
+    
+    .list-group-item:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Sistema de Consulta de Automóveis carregado');
+        
+        // Captura o formulário de busca rápida
+        const form = document.getElementById('busca-rapida-form');
+        const resultadosDiv = document.getElementById('resultados-busca');
+        const listaResultados = document.getElementById('lista-resultados');
+        
+        // Adiciona evento de submit ao formulário
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Obtém os dados do formulário
+            const formData = new FormData(form);
+            
+            // Obtém o token CSRF
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Exibe mensagem de carregamento
+            listaResultados.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>';
+            resultadosDiv.style.display = 'block';
+            
+            // Envia a requisição AJAX
+            fetch('{% url "automoveis:busca_rapida" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Limpa a lista de resultados
+                listaResultados.innerHTML = '';
+                
+                if (data.length === 0) {
+                    // Exibe mensagem de nenhum resultado encontrado
+                    listaResultados.innerHTML = '<div class="alert alert-info">Nenhum automóvel encontrado com os filtros especificados.</div>';
+                } else {
+                    // Exibe os resultados
+                    data.forEach(carro => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        
+                        // Cria o badge de disponibilidade com cores suavizadas
+                        const disponibilidadeBadge = carro.disponivel ? 
+                            `<span class="badge badge-disponivel">Disponível</span>` : 
+                            `<span class="badge badge-indisponivel">Indisponível</span>`;
+                        
+                        item.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">${carro.marca} ${carro.modelo} ${carro.ano_fabricacao}</h5>
+                                <div class="disponibilidade-container">${disponibilidadeBadge}</div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <div class="preco-destaque">
+                                        <div class="preco-label">Preço</div>
+                                        <div class="preco-valor">R$ ${carro.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="km-destaque">
+                                        <div class="km-label">Quilometragem</div>
+                                        <div class="km-valor">${carro.quilometragem.toLocaleString('pt-BR')} km</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="mb-1 mt-2">Combustível: ${carro.combustivel} | Cor: ${carro.cor}</p>
+                        `;
+                        listaResultados.appendChild(item);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                listaResultados.innerHTML = '<div class="alert alert-danger">Ocorreu um erro ao processar sua busca. Por favor, tente novamente.</div>';
+            });
+        });
+    });
+</script>
+{% endblock %}
